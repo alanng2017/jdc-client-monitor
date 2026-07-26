@@ -213,17 +213,18 @@ class Store:
                     )
                 else:
                     was_online = bool(row["online"])
-                    c.execute(
-                        """
-                        UPDATE devices SET router_mac=?, router_name=?,
-                          hostname=COALESCE(NULLIF(?,''), hostname),
-                          ip=COALESCE(NULLIF(?,''), ip),
-                          online=1, last_seen=?, last_online=?, miss_count=0, updated_at=?
-                        WHERE mac=?
-                        """,
-                        (router_mac, router_name, hostname, ip, now, now, now, mac),
-                    )
                     if not was_online:
+                        # 离线→在线：last_online = reonline 时刻
+                        c.execute(
+                            """
+                            UPDATE devices SET router_mac=?, router_name=?,
+                              hostname=COALESCE(NULLIF(?,''), hostname),
+                              ip=COALESCE(NULLIF(?,''), ip),
+                              online=1, last_seen=?, last_online=?, miss_count=0, updated_at=?
+                            WHERE mac=?
+                            """,
+                            (router_mac, router_name, hostname, ip, now, now, now, mac),
+                        )
                         c.execute(
                             "INSERT INTO events(mac,event,ts,router_mac,hostname,ip,note) VALUES(?,?,?,?,?,?,?)",
                             (
@@ -244,6 +245,18 @@ class Store:
                                 "hostname": hostname or row["hostname"],
                                 "ip": ip or row["ip"],
                             }
+                        )
+                    else:
+                        # 已在线：只刷 last_seen，不改 last_online（保持 reonline 时间）
+                        c.execute(
+                            """
+                            UPDATE devices SET router_mac=?, router_name=?,
+                              hostname=COALESCE(NULLIF(?,''), hostname),
+                              ip=COALESCE(NULLIF(?,''), ip),
+                              online=1, last_seen=?, miss_count=0, updated_at=?
+                            WHERE mac=?
+                            """,
+                            (router_mac, router_name, hostname, ip, now, now, mac),
                         )
 
             rows = c.execute(
