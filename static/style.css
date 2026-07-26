@@ -180,6 +180,11 @@ tr:hover td { background: rgba(255,255,255,0.02); }
 .pill.off { background: #3a1a1e; color: var(--bad); }
 .pill.ev-on { background: #163a2a; color: var(--ok); }
 .pill.ev-off { background: #3a1a1e; color: var(--bad); }
+.pill.band { font-weight: 600; letter-spacing: 0.02em; }
+.pill.band-24 { background: #2a3a16; color: #b8e06a; }
+.pill.band-52 { background: #16303a; color: #59c2ff; }
+.pill.band-58 { background: #1e1640; color: #c4a1ff; }
+.pill.band-5 { background: #16303a; color: #7dd3fc; }
 .muted { color: var(--muted); }
 .err {
   background: #3a1a1e;

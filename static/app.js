@@ -166,10 +166,30 @@
     return `${minutes}分钟`;
   }
 
+  function fmtBand(b) {
+    const s = String(b || "").trim();
+    if (!s) return "—";
+    const low = s.toLowerCase();
+    if (low.includes("2.4") || low === "24g" || low === "2g") return "2.4G";
+    if (low.includes("5.8") || low === "58g") return "5.8G";
+    if (low.includes("5.2") || low === "52g") return "5.2G";
+    if (low.includes("5g") || low === "5") return "5G";
+    return s;
+  }
+
+  function bandClass(b) {
+    const s = fmtBand(b);
+    if (s === "2.4G") return "band-24";
+    if (s === "5.2G") return "band-52";
+    if (s === "5.8G") return "band-58";
+    if (s === "5G") return "band-5";
+    return "";
+  }
+
   function renderDevices() {
     const rows = filteredDevices();
     if (!rows.length) {
-      tbodyDev.innerHTML = `<tr><td colspan="9" class="muted">无匹配设备</td></tr>`;
+      tbodyDev.innerHTML = `<tr><td colspan="10" class="muted">无匹配设备</td></tr>`;
       return;
     }
     tbodyDev.innerHTML = rows.map((d) => `
@@ -184,6 +204,7 @@
           <div>${esc(d.hostname || "—")}</div>
           <div class="muted mono host-mac">${esc(d.mac)}</div>
         </td>
+        <td><span class="pill band ${bandClass(d.band)}">${esc(fmtBand(d.band))}</span>${d.rssi ? `<div class="muted mono host-mac">${esc(d.rssi)} dBm</div>` : ""}</td>
         <td class="mono">${esc(d.ip || "")}</td>
         <td>${esc(d.router_name || "")}<div class="muted mono">${esc(d.router_mac || "")}</div></td>
         <td class="muted">${esc(fmtBJ(d.last_online))}</td>
@@ -240,6 +261,8 @@
           <div><span>自定义名</span><b>${esc(d.alias || "（未设置）")}</b></div>
           <div><span>主机名</span><b>${esc(d.hostname || "—")}</b></div>
           <div><span>IP</span><b class="mono">${esc(d.ip || "—")}</b></div>
+          <div><span>频段</span><b><span class="pill band ${bandClass(d.band)}">${esc(fmtBand(d.band))}</span></b></div>
+          <div><span>信号</span><b class="mono">${esc(d.rssi ? (d.rssi + " dBm") : "—")}</b></div>
           <div><span>路由器</span><b>${esc(d.router_name || "—")}</b><div class="muted mono">${esc(d.router_mac || "")}</div></div>
           <div><span>最新上线时间</span><b>${esc(fmtBJ(d.last_online))}</b></div>
           <div><span>在线时长</span><b>${fmtDuration(d.online, d.last_online, d.last_offline)}</b></div>

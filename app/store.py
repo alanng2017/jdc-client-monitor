@@ -106,7 +106,9 @@ class Store:
                     last_online TEXT,
                     last_offline TEXT,
                     miss_count INTEGER NOT NULL DEFAULT 0,
-                    updated_at TEXT
+                    updated_at TEXT,
+                    band TEXT,
+                    rssi TEXT
                 );
                 CREATE TABLE IF NOT EXISTS events (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -126,6 +128,12 @@ class Store:
                 );
                 """
             )
+            # migrate older DBs
+            cols = {r[1] for r in c.execute("PRAGMA table_info(devices)").fetchall()}
+            if "band" not in cols:
+                c.execute("ALTER TABLE devices ADD COLUMN band TEXT")
+            if "rssi" not in cols:
+                c.execute("ALTER TABLE devices ADD COLUMN rssi TEXT")
 
     def load_aliases(self) -> dict[str, str]:
         try:
@@ -194,15 +202,17 @@ class Store:
                 mac = cl["mac"].lower()
                 hostname = cl.get("hostname") or ""
                 ip = cl.get("ip") or ""
+                band = str(cl.get("band") or "").strip()
+                rssi = str(cl.get("rssi") or "").strip()
                 row = c.execute("SELECT * FROM devices WHERE mac=?", (mac,)).fetchone()
                 if row is None:
                     c.execute(
                         """
                         INSERT INTO devices(mac,router_mac,router_name,hostname,ip,online,
-                          first_seen,last_seen,last_online,last_offline,miss_count,updated_at)
-                        VALUES(?,?,?,?,?,1,?,?,?,NULL,0,?)
+                          first_seen,last_seen,last_online,last_offline,miss_count,updated_at,band,rssi)
+                        VALUES(?,?,?,?,?,1,?,?,?,NULL,0,?,?,?)
                         """,
-                        (mac, router_mac, router_name, hostname, ip, now, now, now, now),
+                        (mac, router_mac, router_name, hostname, ip, now, now, now, now, band or None, rssi or None),
                     )
                     c.execute(
                         "INSERT INTO events(mac,event,ts,router_mac,hostname,ip,note) VALUES(?,?,?,?,?,?,?)",
@@ -220,10 +230,12 @@ class Store:
                             UPDATE devices SET router_mac=?, router_name=?,
                               hostname=COALESCE(NULLIF(?,''), hostname),
                               ip=COALESCE(NULLIF(?,''), ip),
+                              band=COALESCE(NULLIF(?,''), band),
+                              rssi=COALESCE(NULLIF(?,''), rssi),
                               online=1, last_seen=?, last_online=?, miss_count=0, updated_at=?
                             WHERE mac=?
                             """,
-                            (router_mac, router_name, hostname, ip, now, now, now, mac),
+                            (router_mac, router_name, hostname, ip, band, rssi, now, now, now, mac),
                         )
                         c.execute(
                             "INSERT INTO events(mac,event,ts,router_mac,hostname,ip,note) VALUES(?,?,?,?,?,?,?)",
@@ -247,16 +259,18 @@ class Store:
                             }
                         )
                     else:
-                        # 已在线：只刷 last_seen，不改 last_online（保持 reonline 时间）
+                        # 已在线：只刷 last_seen/band/rssi，不改 last_online
                         c.execute(
                             """
                             UPDATE devices SET router_mac=?, router_name=?,
                               hostname=COALESCE(NULLIF(?,''), hostname),
                               ip=COALESCE(NULLIF(?,''), ip),
+                              band=COALESCE(NULLIF(?,''), band),
+                              rssi=COALESCE(NULLIF(?,''), rssi),
                               online=1, last_seen=?, miss_count=0, updated_at=?
                             WHERE mac=?
                             """,
-                            (router_mac, router_name, hostname, ip, now, now, mac),
+                            (router_mac, router_name, hostname, ip, band, rssi, now, now, mac),
                         )
 
             rows = c.execute(
@@ -322,14 +336,16 @@ class Store:
                     continue
                 hostname = cl.get("hostname") or ""
                 ip = cl.get("ip") or ""
+                band = str(cl.get("band") or "").strip()
+                rssi = str(cl.get("rssi") or "").strip()
                 ts = cl.get("last_offline") or now
                 row = c.execute("SELECT * FROM devices WHERE mac=?", (mac,)).fetchone()
                 if row is None:
                     c.execute(
                         """
                         INSERT INTO devices(mac,router_mac,router_name,hostname,ip,online,
-                          first_seen,last_seen,last_online,last_offline,miss_count,updated_at)
-                        VALUES(?,?,?,?,?,0,?,?,?,?,?,?)
+                          first_seen,last_seen,last_online,last_offline,miss_count,updated_at,band,rssi)
+                        VALUES(?,?,?,?,?,0,?,?,?,?,?,?,?,?)
                         """,
                         (
                             mac,
@@ -343,6 +359,8 @@ class Store:
                             cl.get("last_offline") or ts,
                             99,
                             now,
+                            band or None,
+                            rssi or None,
                         ),
                     )
                     c.execute(
@@ -359,6 +377,8 @@ class Store:
                         UPDATE devices SET router_mac=?, router_name=?,
                           hostname=COALESCE(NULLIF(?,''), hostname),
                           ip=COALESCE(NULLIF(?,''), ip),
+                          band=COALESCE(NULLIF(?,''), band),
+                          rssi=COALESCE(NULLIF(?,''), rssi),
                           online=0, miss_count=99,
                           last_offline=COALESCE(NULLIF(?,''), last_offline, ?),
                           updated_at=?
@@ -369,6 +389,8 @@ class Store:
                             router_name,
                             hostname,
                             ip,
+                            band,
+                            rssi,
                             cl.get("last_offline") or "",
                             now,
                             now,
