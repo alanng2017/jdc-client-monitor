@@ -1,0 +1,228 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>京东云无线宝 · 客户端上下线监控</title>
+  <link rel="stylesheet" href="/static/style.css" />
+</head>
+<body>
+  <header class="top">
+    <div>
+      <h1>京东云无线宝 · 客户端监控</h1>
+      <p class="sub">云端 API 轮询 · 外地路由器也可 · 自定义名字 · 实时表格 · 点击数字/设备名看详情</p>
+    </div>
+    <div class="badges">
+      <span id="wsState" class="badge">WS …</span>
+      <span id="keyState" class="badge {% if wskey_set %}ok{% else %}bad{% endif %}">
+        {% if wskey_set %}WSKEY 已配置{% else %}WSKEY 未配置{% endif %}
+      </span>
+      <button id="btnSettings" type="button" class="linkish">设置</button>
+      <button id="btnPoll" type="button">立即刷新</button>
+      {% if auth_enabled %}
+      <button id="btnLogout" type="button" class="linkish">退出</button>
+      {% endif %}
+    </div>
+  </header>
+
+  <section class="stats" id="stats">
+    <button type="button" class="card clickable" data-filter="online" title="只看在线设备">
+      <div class="n" id="sOnline">-</div>
+      <div class="l">在线</div>
+    </button>
+    <button type="button" class="card clickable" data-filter="offline" title="只看离线设备">
+      <div class="n" id="sOffline">-</div>
+      <div class="l">离线</div>
+    </button>
+    <button type="button" class="card clickable" data-filter="all" title="全部设备">
+      <div class="n" id="sTotal">-</div>
+      <div class="l">设备总数</div>
+    </button>
+    <div class="card">
+      <div class="n small" id="sPoll">-</div>
+      <div class="l">上次轮询（北京时间）</div>
+    </div>
+  </section>
+
+  <p id="errBox" class="err" style="display:none"></p>
+  <p id="okBox" class="okbox" style="display:none"></p>
+
+  <section class="panel" id="devicePanel">
+    <div class="panel-h">
+      <h2 id="devicePanelTitle">设备表 · 全部</h2>
+      <div class="panel-tools">
+        <button type="button" id="btnClearFilter" class="linkish" style="display:none">清除筛选</button>
+        <input id="filter" type="search" placeholder="过滤名字 / MAC / IP" />
+      </div>
+    </div>
+    <div class="table-wrap">
+      <table id="devTable">
+        <thead>
+          <tr>
+            <th>状态</th>
+            <th>自定义名</th>
+            <th>主机名 / MAC</th>
+            <th>IP</th>
+            <th>路由器</th>
+            <th>最新上线时间</th>
+            <th>在线时间</th>
+            <th>最后离线</th>
+            <th>操作</th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </div>
+  </section>
+
+  <section class="panel">
+    <div class="panel-h"><h2>上下线记录（近 30 天）</h2></div>
+    <div class="table-wrap">
+      <table id="evtTable">
+        <thead>
+          <tr>
+            <th>时间</th>
+            <th>事件</th>
+            <th>名字</th>
+            <th>MAC</th>
+            <th>IP</th>
+            <th>备注</th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </div>
+  </section>
+
+  <dialog id="detailDlg">
+    <div class="detail-head">
+      <div>
+        <h3 id="detailTitle">设备详情</h3>
+        <p class="muted mono" id="detailMac"></p>
+      </div>
+      <button type="button" id="detailClose" class="linkish">关闭</button>
+    </div>
+    <div id="detailBody" class="detail-body"></div>
+    <h4 class="detail-h">上下线时间（近 30 天）</h4>
+    <div class="table-wrap detail-events">
+      <table id="detailEvtTable">
+        <thead>
+          <tr>
+            <th>时间</th>
+            <th>事件</th>
+            <th>IP</th>
+            <th>备注</th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </div>
+    <div class="dlg-actions">
+      <button type="button" id="detailAlias" class="linkish">改名</button>
+      <button type="button" id="detailClose2" class="primary">关闭</button>
+    </div>
+  </dialog>
+
+  <dialog id="aliasDlg">
+    <form method="dialog" id="aliasForm">
+      <h3>自定义名字</h3>
+      <p class="muted" id="aliasMac"></p>
+      <input id="aliasName" type="text" placeholder="例如：爸爸手机" maxlength="64" />
+      <div class="dlg-actions">
+        <button value="cancel" type="submit">取消</button>
+        <button id="aliasSave" value="ok" type="submit" class="primary">保存</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog id="settingsDlg">
+    <form id="settingsForm" method="dialog">
+      <h3>设置 · WSKEY / 轮询</h3>
+      <p class="muted" id="settingsHint">WSKEY 来自京东云无线宝 APP 抓包（请求头 wskey / tgt）。保存后立刻生效，无需重启容器。</p>
+
+      <label class="field">
+        <span>当前 WSKEY</span>
+        <div id="wskeyStatus" class="mono muted">未配置</div>
+      </label>
+
+      <label class="field">
+        <span>新 WSKEY（留空=不修改）</span>
+        <textarea id="fWskey" rows="3" placeholder="粘贴抓到的 wskey…" autocomplete="off" spellcheck="false"></textarea>
+      </label>
+
+      <label class="check">
+        <input type="checkbox" id="fClearWskey" />
+        清空已保存的 WSKEY
+      </label>
+
+      <div class="grid2">
+        <label class="field">
+          <span>轮询间隔（秒）</span>
+          <input id="fPollInterval" type="number" min="15" max="86400" step="1" />
+        </label>
+        <label class="field">
+          <span>离线防抖（连续 miss 次数）</span>
+          <input id="fOfflineMisses" type="number" min="1" max="20" step="1" />
+        </label>
+      </div>
+
+      <label class="field">
+        <span>只监控客户端 MAC（逗号分隔，可后 6 位；空=全部）</span>
+        <input id="fWatchMacs" type="text" placeholder="aa:bb:cc:dd:ee:ff,112233" />
+      </label>
+
+      <label class="field">
+        <span>只查路由器 MAC（空=账号下全部）</span>
+        <input id="fRouterMacs" type="text" placeholder="AA:BB:CC:DD:EE:FF" />
+      </label>
+
+      <div class="grid2">
+        <label class="field">
+          <span>HTTP 代理（可选）</span>
+          <input id="fHttpProxy" type="text" placeholder="http://proxy:port" />
+        </label>
+        <label class="field">
+          <span>HTTPS 代理（可选）</span>
+          <input id="fHttpsProxy" type="text" placeholder="http://proxy:port" />
+        </label>
+      </div>
+
+      <label class="check">
+        <input type="checkbox" id="fPollNow" checked />
+        保存后立即轮询一次
+      </label>
+
+      <hr style="border:0;border-top:1px solid #2a3348;margin:14px 0" />
+      <h4 style="margin:0 0 8px;font-size:.95rem">网页登录密码</h4>
+      <label class="field">
+        <span>当前状态</span>
+        <div id="uiPassStatus" class="mono muted">—</div>
+      </label>
+      <label class="field">
+        <span>新密码（留空=不修改）</span>
+        <input id="fUiPassword" type="password" placeholder="设置后访问需登录" autocomplete="new-password" />
+      </label>
+      <label class="check">
+        <input type="checkbox" id="fClearUiPassword" />
+        清除登录密码（下次访问将重新要求首次设置）
+      </label>
+
+      <div class="dlg-actions">
+        <button value="cancel" type="submit">取消</button>
+        <button id="settingsSave" value="ok" type="submit" class="primary">保存</button>
+      </div>
+    </form>
+  </dialog>
+
+  <script>
+    window.__BOOT__ = {
+      devices: {{ devices | tojson }},
+      events: {{ events | tojson }},
+      stats: {{ stats | tojson }},
+      pollInterval: {{ poll_interval }},
+      settings: {{ settings_public | tojson }}
+    };
+  </script>
+  <script src="/static/app.js?v=20260726-mac-under-host"></script>
+</body>
+</html>

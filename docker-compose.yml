@@ -1,0 +1,44 @@
+services:
+  jdc-client-monitor:
+    build:
+      context: .
+      args:
+        # 构建时 pip 若慢/失败，可打开代理
+        HTTP_PROXY: "${BUILD_HTTP_PROXY:-}"
+        HTTPS_PROXY: "${BUILD_HTTPS_PROXY:-}"
+        http_proxy: "${BUILD_HTTP_PROXY:-}"
+        https_proxy: "${BUILD_HTTPS_PROXY:-}"
+    image: local/jdc-client-monitor:latest
+    container_name: jdc-client-monitor
+    restart: unless-stopped
+    ports:
+      - "8780:8780"
+    environment:
+      TZ: Asia/Shanghai
+      # 必填：京东云无线宝 APP 抓包得到的 wskey（与 tgt 同值）
+      WSKEY: "${WSKEY}"
+      # 轮询间隔秒（建议 >= 30，别太猛）
+      POLL_INTERVAL: "${POLL_INTERVAL:-45}"
+      # 连续 miss 几次才记离线（防抖）
+      OFFLINE_MISSES: "${OFFLINE_MISSES:-2}"
+      # 只盯某些 MAC（完整或后 6 位，逗号分隔）；空=全部客户端
+      WATCH_MACS: "${WATCH_MACS:-}"
+      # 只盯某几台路由器 MAC（完整，逗号分隔）；空=账号下全部路由
+      ROUTER_MACS: "${ROUTER_MACS:-}"
+      PORT: "8780"
+      DB_PATH: /data/monitor.db
+      ALIASES_FILE: /data/aliases.json
+      SECRETS_FILE: /data/secrets.json
+      # 网页登录密码（空=不启用；也可网页设置里改，会写入 secrets.json）
+      UI_PASSWORD: "${UI_PASSWORD:-}"
+      SESSION_SECRET: "${SESSION_SECRET:-jdc-client-monitor-session}"
+      # 可选 HTTP 代理（本机出网差时）
+      HTTP_PROXY: "${HTTP_PROXY:-}"
+      HTTPS_PROXY: "${HTTPS_PROXY:-}"
+    volumes:
+      - ./data:/data
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
