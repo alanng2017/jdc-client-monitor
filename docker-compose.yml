@@ -13,6 +13,11 @@ services:
     restart: unless-stopped
     ports:
       - "8780:8780"
+    volumes:
+      - ./app:/app/app:ro
+      - ./templates:/app/templates:ro
+      - ./static:/app/static:ro
+      - ./data:/data
     environment:
       TZ: Asia/Shanghai
       # 必填：京东云无线宝 APP 抓包得到的 wskey（与 tgt 同值）
@@ -35,8 +40,6 @@ services:
       # 可选 HTTP 代理（本机出网差时）
       HTTP_PROXY: "${HTTP_PROXY:-}"
       HTTPS_PROXY: "${HTTPS_PROXY:-}"
-    volumes:
-      - ./data:/data
     logging:
       driver: json-file
       options:

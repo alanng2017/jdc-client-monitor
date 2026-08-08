@@ -459,12 +459,12 @@ class Store:
         with self._lock, self._conn() as c:
             if mac:
                 rows = c.execute(
-                    "SELECT * FROM events WHERE mac=? AND ts>=? ORDER BY id DESC LIMIT ?",
+                    "SELECT * FROM events WHERE mac=? AND ts>=? ORDER BY ts DESC LIMIT ?",
                     (mac.lower(), cutoff, limit),
                 ).fetchall()
             else:
                 rows = c.execute(
-                    "SELECT * FROM events WHERE ts>=? ORDER BY id DESC LIMIT ?",
+                    "SELECT * FROM events WHERE ts>=? ORDER BY ts DESC LIMIT ?",
                     (cutoff, limit),
                 ).fetchall()
         out = []

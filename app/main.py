@@ -165,6 +165,38 @@ async def api_device_detail(mac: str, limit: int = Query(500, ge=1, le=2000)):
         "event_retention_days": 30,
     }
 
+@app.get("/api/search")
+async def api_search_devices(query: str = Query(..., min_length=1)):
+    """按自定义名 / 主机名搜索，返回所有同名设备 + 各自上下线事件（合并展示）。"""
+    if not query:
+        return {"devices": [], "events": []}
+    q = query.lower()
+    devices = store.list_devices()
+    matches = [d for d in devices
+               if q in (d.get("display_name") or "").lower()
+               or q in (d.get("hostname") or "").lower()
+               or q in (d.get("alias") or "").lower()
+               or q in (d.get("mac") or "").lower()]
+    # 同一 display_name 的才算"同一个备注名"，按备注名分组取设备列表
+    from collections import OrderedDict
+    groups: dict[str, list] = OrderedDict()
+    for d in matches:
+        key = d.get("display_name") or d.get("mac")
+        groups.setdefault(key, []).append(d)
+    result_devices = []
+    all_events = []
+    for name, devs in groups.items():
+        if name == query or query in name:
+            result_devices.append({"name": name, "devices": devs, "count": len(devs)})
+            for d in devs:
+                events = store.list_events(limit=500, mac=d.get("mac"))
+                for e in events:
+                    e["display_name"] = name
+                    e["group_name"] = name
+                all_events.extend(events)
+    all_events.sort(key=lambda e: e.get("ts") or "", reverse=True)
+    return {"groups": result_devices, "events": all_events[:500]}
+
 
 @app.get("/api/events")
 async def api_events(limit: int = Query(200, ge=1, le=2000), mac: str | None = None):

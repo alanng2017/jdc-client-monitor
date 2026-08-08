@@ -196,7 +196,7 @@
       <tr data-mac="${esc(d.mac)}">
         <td><span class="pill ${d.online ? "on" : "off"}">${d.online ? "在线" : "离线"}</span></td>
         <td>
-          <button type="button" class="name-link btn-detail" data-mac="${esc(d.mac)}">
+          <button type="button" class="name-link btn-detail" data-mac="${esc(d.mac)}" data-name="${esc(d.display_name || d.mac)}">
             ${esc(d.display_name || d.mac)}
           </button>
         </td>
@@ -211,7 +211,7 @@
         <td>${fmtDuration(d.online, d.last_online, d.last_offline)}</td>
         <td class="muted">${esc(fmtBJ(d.last_offline))}</td>
         <td>
-          <button class="linkish btn-detail" type="button" data-mac="${esc(d.mac)}">详情</button>
+          <button class="linkish btn-detail" type="button" data-mac="${esc(d.mac)}" data-name="${esc(d.display_name || d.mac)}">详情</button>
           <button class="linkish btn-alias" type="button" data-mac="${esc(d.mac)}" data-name="${esc(d.alias || d.display_name || "")}">改名</button>
         </td>
       </tr>
@@ -219,7 +219,9 @@
   }
 
   function renderEvents() {
-    tbodyEvt.innerHTML = (state.events || []).map((e) => `
+    let evs = (state.events || []).slice();
+    evs.sort((a,b) => (b.ts||"").localeCompare(a.ts||""));
+    tbodyEvt.innerHTML = evs.map((e) => `
       <tr>
         <td class="muted">${esc(fmtBJ(e.ts))}</td>
         <td><span class="pill ${e.event === "online" ? "ev-on" : "ev-off"}">${e.event === "online" ? "上线" : "离线"}</span></td>
@@ -239,6 +241,63 @@
     renderStats();
     renderDevices();
     renderEvents();
+  }
+
+  async function openGroupDetail(name) {
+    state.detailMac = null;
+    $("detailTitle").textContent = "加载中…";
+    $("detailMac").textContent = "";
+    $("detailBody").innerHTML = "";
+    $("detailEvtTable").querySelector("tbody").innerHTML = "";
+    $("detailDlg").showModal();
+    try {
+      const r = await fetch("/api/search?query=" + encodeURIComponent(name));
+      const data = await r.json();
+      const groups = data.groups || [];
+      if (!groups.length) {
+        $("detailTitle").textContent = name;
+        $("detailBody").innerHTML = `<p class="muted">无匹配设备</p>`;
+        return;
+      }
+      // 合并显示：同名所有设备
+      const group = groups[0];
+      $("detailTitle").textContent = group.name;
+      $("detailMac").textContent = `同「${group.name}」共 ${group.count} 个设备，上下线时间已整合`;
+      const devs = group.devices;
+      let body = `<div class="kv">`;
+      for (const d of devs) {
+        body += `
+          <div class="device-group-card">
+            <div><span>状态</span><b class="${d.online ? "ok" : "bad"}">${d.online ? "在线" : "离线"}</b></div>
+            <div><span>主机名</span><b>${esc(d.hostname || "—")}</b></div>
+            <div><span>IP</span><b class="mono">${esc(d.ip || "—")}</b></div>
+            <div><span>MAC</span><b class="mono">${esc(d.mac)}</b></div>
+            <div><span>最新上线时间</span><b>${esc(fmtBJ(d.last_online))}</b></div>
+            <div><span>最后离线</span><b>${esc(fmtBJ(d.last_offline))}</b></div>
+            <div><span>在线时长</span><b>${fmtDuration(d.online, d.last_online, d.last_offline)}</b></div>
+          </div>`;
+      }
+      body += `</div>`;
+      $("detailBody").innerHTML = body;
+      const tb = $("detailEvtTable").querySelector("tbody");
+      let evs = data.events || [];
+      if (!evs.length) {
+        tb.innerHTML = `<tr><td colspan="4" class="muted">近 30 天无上下线事件</td></tr>`;
+      } else {
+        // 时间线排列：从旧到新，最新在最下面
+        evs.sort((a,b) => (b.ts||"").localeCompare(a.ts||""));
+        tb.innerHTML = evs.map((e) => `
+          <tr>
+            <td class="muted">${esc(fmtBJ(e.ts))}</td>
+            <td><span class="pill ${e.event === "online" ? "ev-on" : "ev-off"}">${e.event === "online" ? "上线" : "离线"}</span></td>
+            <td class="mono">${esc(e.ip || "")}</td>
+            <td class="muted mono">${esc(e.mac)}</td>
+          </tr>
+        `).join("");
+      }
+    } catch (e) {
+      $("detailBody").innerHTML = `<p class="err">加载失败: ${esc(e)}</p>`;
+    }
   }
 
   async function openDeviceDetail(mac) {
@@ -273,10 +332,11 @@
         </div>
       `;
       const tb = $("detailEvtTable").querySelector("tbody");
-      const evs = data.events || [];
+      let evs = data.events || [];
       if (!evs.length) {
         tb.innerHTML = `<tr><td colspan="4" class="muted">近 30 天无上下线事件</td></tr>`;
       } else {
+        evs.sort((a,b) => (b.ts||"").localeCompare(a.ts||""));
         tb.innerHTML = evs.map((e) => `
           <tr>
             <td class="muted">${esc(fmtBJ(e.ts))}</td>
@@ -326,7 +386,17 @@
   document.body.addEventListener("click", (ev) => {
     const detailBtn = ev.target.closest(".btn-detail");
     if (detailBtn) {
-      openDeviceDetail(detailBtn.dataset.mac);
+      // 用 data-name 打开同名所有设备；无则 fallback 用 mac
+      const name = detailBtn.dataset.name;
+      const mac = detailBtn.dataset.mac;
+      if (name) {
+        openGroupDetail(name);
+        return;
+      }
+      if (mac) {
+        openDeviceDetail(mac);
+        return;
+      }
       return;
     }
     const aliasBtn = ev.target.closest(".btn-alias");

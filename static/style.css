@@ -131,6 +131,31 @@ button:hover { filter: brightness(1.08); }
 .detail-body .kv .ok { color: var(--ok); }
 .detail-body .kv .bad { color: var(--bad); }
 .detail-events { max-height: 280px; overflow: auto; border: 1px solid var(--line); border-radius: 8px; }
+.device-group-card {
+  grid-column: 1 / -1;
+  background: rgba(255,255,255,.03);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 10px 12px;
+  margin-bottom: 8px;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px 14px;
+}
+.device-group-card:last-child { margin-bottom: 0; }
+.device-group-card > div span {
+  display: inline;
+  color: var(--muted);
+  font-size: .75rem;
+  margin-right: 6px;
+}
+.device-group-card > div b { font-weight: 600; }
+.device-group-card > div b.mono { font-family: var(--mono); font-size: .82rem; }
+.device-group-card > div b.ok { color: var(--ok); }
+.device-group-card > div b.bad { color: var(--bad); }
+@media (max-width: 600px) {
+  .device-group-card { grid-template-columns: 1fr; }
+}
 .panel {
   background: var(--panel);
   border: 1px solid var(--line);
